@@ -1,0 +1,8 @@
+# Temporary Files
+.DS_Store
+
+# Developer Files
+*.ipynb
+
+# Data
+episodes/
