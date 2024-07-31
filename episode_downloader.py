@@ -12,18 +12,31 @@ from mutagen.easyid3 import EasyID3
 URL = "https://www.zdf.de/gesellschaft/markus-lanz"
 
 def broadcast_time_constructor(date_string):
-    """"""
+    """Generate possible broadcast times based on the given date string."""
     date_object = dt.datetime.strptime(date_string, "%d.%m.%Y") + dt.timedelta(days=1)
     possible_times = [date_object - i * dt.timedelta(minutes=15) for i in range(16)]
     return possible_times
 
 def popup_acceptor(zdf_webpage_driver_instance):
-    """"""
+    """Accept the popup if it appears."""
     popup_button = zdf_webpage_driver_instance.find_element(By.CSS_SELECTOR, "#zdf-cmp-deny-btn")
     popup_button.click()
 
+def get_guest_talking_points(episode_url):
+    """Retrieve guest talking points from a specific episode URL."""
+    download_chrome_options = Options()
+    download_chrome_options.add_argument('--headless')  # Run Chrome in headless mode
+    download_chrome_options.add_argument('--no-sandbox')  # Disable sandbox for headless mode
+    download_chrome_options.add_argument('--log-level=3')  # Set log level to suppress unnecessary logs
+    download_driver = webdriver.Chrome(options=download_chrome_options)
+    download_driver.get(url=episode_url)
+    popup_acceptor(download_driver)
+    guest_talking_points = download_driver.find_element(By.CSS_SELECTOR, ".b-post-content").text
+    download_driver.quit()
+    return guest_talking_points
+
 def scan_episodes(description_webdriver):
-    """"""
+    """Retrieve and parse episode information from the webpage."""
     print("Retrieving episode information...")
     episodes_box = description_webdriver.find_element(By.CSS_SELECTOR, "div.tile-box-wrap.showmore-wrapper")
     episode_boxes = episodes_box.find_elements(By.CSS_SELECTOR, ".b-cluster-teaser.b-vertical-teaser")
@@ -54,7 +67,7 @@ def scan_episodes(description_webdriver):
     return full_info
 
 def episode_picker(full_info):
-    """"""
+    """Prompt user to select episodes and return the selected episodes."""
     print("These are the most recent episodes:\n")
     for date, details in reversed(full_info.items()):
         print(f'Episode Number: {details.get("episode_number", "Not available.")}')
@@ -77,21 +90,8 @@ def episode_picker(full_info):
     full_info_selection = {date: full_info[date] for date in date_selection}
     return full_info_selection
 
-def get_guest_talking_points(episode_url):
-    """"""
-    download_chrome_options = Options()
-    download_chrome_options.add_argument('--headless')  # Run Chrome in headless mode
-    download_chrome_options.add_argument('--no-sandbox')  # Disable sandbox for headless mode
-    download_chrome_options.add_argument('--log-level=3')  # Set log level to suppress unnecessary logs
-    download_driver = webdriver.Chrome(options=download_chrome_options)
-    download_driver.get(url=episode_url)
-    popup_acceptor(download_driver)
-    guest_talking_points = download_driver.find_element(By.CSS_SELECTOR, ".b-post-content").text
-    download_driver.quit()
-    return guest_talking_points
-
 def add_episode_urls(selected_episode_info):
-    """"""
+    """Add download URLs to the selected episodes."""
     for date in selected_episode_info:
         plausible_times = broadcast_time_constructor(date)
         potential_links = []
@@ -109,6 +109,7 @@ def add_episode_urls(selected_episode_info):
                 return selected_episode_info
 
 def download_episodes(info_dict):
+    """Download and convert episodes from the provided information dictionary."""
     for i, (date, info) in enumerate(info_dict.items()):
         url = info["url"]
         episode_total = len(info_dict)
@@ -138,7 +139,6 @@ def download_episodes(info_dict):
             os.remove(webm_file_path)
             print("Conversion to mp3 completed, webm file removed.")
 
-            # Add metadata to the MP3 file
             print("Adding metadata to MP3 file.")
             show_name = " ".join(URL.split("/")[-1].split("-")).title()
             audio = EasyID3(mp3_file_path)
@@ -163,11 +163,9 @@ if __name__ == "__main__":
     try:
         recent_episodes = scan_episodes(driver)
     except NoSuchElementException:
-        print("The webdriver had a hiccup. A few retries usually do the job.")
+        print("The webdriver encountered an issue. Please retry.")
     selected_episodes = episode_picker(recent_episodes)
     driver.quit()
 
     downloadable_episodes = add_episode_urls(selected_episodes)
     download_episodes(downloadable_episodes)
-
-# use 'pkill -9 "Google Chrome"' to clean up the driver instances that were not successfully ended by .quit()
